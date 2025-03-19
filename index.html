@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wykres</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            display: flex;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        .left {
+            width: 50%;
+            padding: 20px;
+        }
+        .right {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+        }
+        .chart-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            padding-top: 20px;
+        }
+        button {
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .range-inputs {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding-top: 20px;
+        }
+        .range-inputs label {
+            display: flex;
+            justify-content: space-between;
+        }
+    </style>
+</head>
+<body>
+    <div class="left">
+        <h1>Wykres node.js</h1>
+        <p>Proste GUI js</p>
+        <div class="buttons">
+            <button id="btn0" onclick="updateChart('chart1')">Update chart 1</button>
+            <button id="btn1" onclick="updateChart('chart2')">Update chart 2</button>
+            <button id="btn2" onclick="handleClick(2)">btn2</button>
+            <button id="btn3" onclick="handleClick(3)">btn3</button>
+        </div>
+        <div class="range-inputs">
+            <label>
+                Min:
+                <input type="number" id="minValue" value="0">
+            </label>
+            <label>
+                Max:
+                <input type="number" id="maxValue" value="1000">
+            </label>
+        </div>
+    </div>
+    <div class="right">
+        <div class="chart-container">
+            <canvas id="chart1"></canvas>
+        </div>
+        <div class="chart-container">
+            <canvas id="chart2"></canvas>
+        </div>
+    </div>
+    <script>
+        let chart1, chart2;
+
+        function handleClick(btnNumber) {
+            console.log("Button " + btnNumber + " clicked");
+        }
+
+        function createChart(canvasId) {
+            const minValue = parseInt(document.getElementById('minValue').value, 10);
+            const maxValue = parseInt(document.getElementById('maxValue').value, 10);
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            const data = Array.from({ length: 10 }, () => Math.floor(Math.random() * (maxValue - minValue + 1)) + minValue);
+            const labels = data.map((_, index) => `Punkt ${index + 1}`);
+
+            return new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Przykładowe wartości',
+                        data: data,
+                        borderColor: 'blue',
+                        backgroundColor: 'rgba(0, 0, 255, 0.1)',
+                        borderWidth: 2,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            min: minValue,
+                            max: maxValue
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChart(canvasId) {
+            if (canvasId === 'chart1' && chart1) {
+                chart1.destroy();
+            } else if (canvasId === 'chart2' && chart2) {
+                chart2.destroy();
+            }
+            if (canvasId === 'chart1') {
+                chart1 = createChart(canvasId);
+            } else if (canvasId === 'chart2') {
+                chart2 = createChart(canvasId);
+            }
+        }
+
+        chart1 = createChart('chart1');
+        chart2 = createChart('chart2');
+    </script>
+</body>
+</html>
