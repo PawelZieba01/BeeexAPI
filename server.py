@@ -5,14 +5,16 @@ import time
 import random
 import queue
 import asyncio
-from logger import logger
+import json
+from logger import log
+import keyboard
+from database import db_measurement
 
-# Disable werkzeug logs
+log.info("Disable werkzeug logs:")
 import logging
-log = logging.getLogger('werkzeug')
-log.setLevel(logging.ERROR)
-
-log = logger(["DEBUG", "INFO", "WARNING", "ERROR"])
+_log = logging.getLogger('werkzeug')
+_log.setLevel(logging.ERROR)
+print("")
 
 app = Flask(__name__)
 sock = Sock(app)
@@ -20,32 +22,55 @@ sock = Sock(app)
 glob_num = 0
 
 # simple database
-simple_db = []
+simple_db = {}
 
 @app.route('/')
 def index():
-    log.info("New HTTP GET connection to /")
+    log.info(f"New HTTP GET connection to / from {request.remote_addr}")
     with open("index.html", "r") as html:
         return render_template_string(html.read())
     
 @app.route('/<device>/save_data', methods=['POST'])
 def save_data(device):
-    log.info(f"New HTTP POST connection to /{device}/save_data")
+    log.info(f"New HTTP POST connection to /{device}/save_data from {request.remote_addr}")
 
-    if(device == 'test_device'):
+    if device == 'test_device':
         data = request.get_json()
-        log.debug(f"Recieved data: {data}")
-        simple_db.append(data)
+        log.debug(f"Recieved data: {json.dumps(data, indent=4)}")
+        simple_db.extend(data)
+        log.debug(f"simple_db length: {len(simple_db)}")
         return "OK"
+    
+    elif device == 'iot_test_dev': 
+        data = request.get_json()
+        log.debug(f"Recieved data: {json.dumps(data, indent=4)}")
+        db = db_measurement(device)
+        db.write_data(data)
+        return "OK"
+    
     else:
         log.warning(f"Device not found: {device})")
         return "Device not found", 404 
     
-@sock.route('/ws')
-def websocket_endpoint(ws):
+# ----------------------------------- WEBSOCKET -----------------------------------
+
+@sock.route('/<device>/ws')
+def websocket_endpoint(ws, device):
     try:
+        log.info(f"New websocket connection to /{device}/ws from {request.remote_addr}")
         while True:
             message = ws.receive(timeout=0.2)
+            if message:
+                log.info(f"New websocket message from {request.remote_addr}")
+                log.debug(f"Websocket recieved message: {message}")
+                if message == "get_db":
+                    log.info(f"Sending data to client at {request.remote_addr}")
+                    db = db_measurement(device)
+                    data = db.read_all_data()
+                    ws.send(json.dumps(data))
+                else:
+                    log.info(f"Sending BAD COMMAND info to client at {request.remote_addr}")
+                    ws.send(f"Bad command")
     except Exception as e:
         log.info(f'Connection closed: {e}')
 
@@ -56,6 +81,8 @@ def processing_thread():
         time.sleep(1)
 
 # ----------------------------------- MAIN -----------------------------------
+
+keyboard.add_hotkey('ctrl+q', lambda: log.debug(f"Simple database: {json.dumps(simple_db, indent=4)}"))
 
 if __name__ == '__main__':
     worker_thread = threading.Thread(target=processing_thread, daemon=True)

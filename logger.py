@@ -11,8 +11,6 @@ color_codes = {
             }
 color_reset = "\033[0m"
 
-
-
 class logger:
     debug_cnt = 0
     info_cnt = 0
@@ -68,6 +66,10 @@ class logger:
         if self.error_cnt > 0:
             self._log(f"{color_codes["ERROR"]}There were errors in the log file. Please check the log file for details.{color_reset}")
 
+log = logger(["DEBUG", "INFO", "WARNING", "ERROR"])
+
+
+
 
 if __name__ == "__main__":
     log = logger()
@@ -77,3 +79,5 @@ if __name__ == "__main__":
     log.error("To jest wiadomość error")
 
     log.summary()
+
+

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wykres</title>
+    <title>BeeeX</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
@@ -15,6 +15,8 @@
         .left {
             width: 50%;
             padding: 20px;
+            display: flex;
+            flex-direction: column;
         }
         .right {
             width: 50%;
@@ -50,17 +52,25 @@
             display: flex;
             justify-content: space-between;
         }
+        .console-log {
+            flex: 1;
+            background-color: #f0f0f0;
+            padding: 10px;
+            margin-top: 20px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+        }
     </style>
 </head>
 <body>
     <div class="left">
-        <h1>Wykres node.js</h1>
-        <p>Proste GUI js</p>
+        <h1>GUI GUI</h1>
+        <p>Simple and ugly GUI :)</p>
         <div class="buttons">
             <button id="btn0" onclick="updateChart('chart1')">Update chart 1</button>
             <button id="btn1" onclick="updateChart('chart2')">Update chart 2</button>
-            <button id="btn2" onclick="handleClick(2)">btn2</button>
-            <button id="btn3" onclick="handleClick(3)">btn3</button>
+            <button id="btn2" onclick="sendToServer('10')">websocket send</button>
+            <button id="btn3" onclick="sendToServer('get_db')">get database</button>
         </div>
         <div class="range-inputs">
             <label>
@@ -72,6 +82,7 @@
                 <input type="number" id="maxValue" value="1000">
             </label>
         </div>
+        <div class="console-log" id="consoleLog"></div>
     </div>
     <div class="right">
         <div class="chart-container">
@@ -81,29 +92,35 @@
             <canvas id="chart2"></canvas>
         </div>
     </div>
+
+
+    
     <script>
         let chart1, chart2;
+        const socket = new WebSocket('ws://127.0.0.1:8000/iot_test_dev/ws');
+        let dataStore = [];
 
-        function handleClick(btnNumber) {
-            console.log("Button " + btnNumber + " clicked");
+
+        function sendToServer(message) {
+            if (socket.readyState === WebSocket.OPEN) {
+                socket.send(message);
+                logToConsole('Sent to server: ' + message);
+            } else {
+                logToConsole('WebSocket connection is not open');
+            }
         }
 
-        function createChart(canvasId) {
-            const minValue = parseInt(document.getElementById('minValue').value, 10);
-            const maxValue = parseInt(document.getElementById('maxValue').value, 10);
+        function createChart(canvasId, labels, data, name, color = [0, 0, 255]) {
             const ctx = document.getElementById(canvasId).getContext('2d');
-            const data = Array.from({ length: 10 }, () => Math.floor(Math.random() * (maxValue - minValue + 1)) + minValue);
-            const labels = data.map((_, index) => `Punkt ${index + 1}`);
-
             return new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: 'Przykładowe wartości',
+                        label: name,
                         data: data,
-                        borderColor: 'blue',
-                        backgroundColor: 'rgba(0, 0, 255, 0.1)',
+                        borderColor: `rgba(${color[0]}, ${color[1]}, ${color[2]}, 1)`,
+                        backgroundColor: `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.1)`,
                         borderWidth: 2,
                         fill: true
                     }]
@@ -112,31 +129,102 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
+                        x: {
+                            min: undefined,
+                            max: undefined
+                        },
                         y: {
                             beginAtZero: true,
-                            min: minValue,
-                            max: maxValue
+                            min: undefined,
+                            max: undefined
                         }
                     }
                 }
             });
         }
 
-        function updateChart(canvasId) {
-            if (canvasId === 'chart1' && chart1) {
-                chart1.destroy();
-            } else if (canvasId === 'chart2' && chart2) {
-                chart2.destroy();
-            }
-            if (canvasId === 'chart1') {
-                chart1 = createChart(canvasId);
-            } else if (canvasId === 'chart2') {
-                chart2 = createChart(canvasId);
-            }
+        function formatTimestamp(timestamp) {
+            const tmp = timestamp.toString();
+            const year = tmp.substring(0, 4);
+            const month = tmp.substring(4, 6);
+            const day = tmp.substring(6, 8);
+            const hour = tmp.substring(8, 10);
+            const minute = tmp.substring(10, 12);
+            const second = tmp.substring(12, 14);
+            return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
         }
 
-        chart1 = createChart('chart1');
-        chart2 = createChart('chart2');
+        function updateChart(canvasId) {
+            const time = dataStore.map(item => formatTimestamp(item.timestamp));
+            const temperature = dataStore.map(item => parseFloat(item.temperature));
+            const humidity = dataStore.map(item => parseFloat(item.humidity));
+
+            // if (canvasId === 'chart1' && chart1) {
+            //     chart1.destroy();
+            // } else if (canvasId === 'chart2' && chart2) {
+            //     chart2.destroy();
+            // }
+
+            // if (canvasId === 'chart1') {
+            //     chart1 = createChart(canvasId, time, temperature, "Temperature",  [255, 0, 0]);
+            // } else if (canvasId === 'chart2') {
+            //     chart2 = createChart(canvasId, time, humidity, "Humidity", [0, 0, 255]);
+            // }
+
+            if (canvasId === 'chart1') {
+                addDataToChart(chart1, time, temperature);
+            } else if (canvasId === 'chart2') {
+                addDataToChart(chart2, time, humidity);
+            }
+
+            logToConsole("Updated " + canvasId);
+        }
+
+        function addDataToChart(chart, labels, data) {
+            labels.forEach((label, index) => {
+                chart.data.labels.push(label);
+                chart.data.datasets[0].data.push(data[index]);
+            });
+            chart.update();
+        }
+
+        function logToConsole(message) {
+            const consoleLog = document.getElementById('consoleLog');
+            const logEntry = document.createElement('div');
+            logEntry.textContent = message;
+            consoleLog.appendChild(logEntry);
+            consoleLog.scrollTop = consoleLog.scrollHeight;
+        }
+
+        function setDataToStore(dataArray) {
+            dataStore = dataArray;
+            logToConsole('Data store updated: ' + JSON.stringify(dataStore));
+        }
+
+
+        socket.onopen = function() {
+            logToConsole('WebSocket connection established');
+        };
+
+        socket.onmessage = function(event) {
+            logToConsole('Message from server: ' + event.data.toString());
+            const jsonData = JSON.parse(event.data);
+            setDataToStore(jsonData);
+            updateChart('chart1');
+            updateChart('chart2');
+        };
+
+        socket.onerror = function(error) {
+            logToConsole('WebSocket error: ' + error);
+        };
+
+        socket.onclose = function() {
+            logToConsole('WebSocket connection closed');
+        };
+
+
+        chart1 = createChart('chart1', [], [], name = "Temperature", color = [255, 0, 0]);
+        chart2 = createChart('chart2', [], [], name = "Humidity", color = [0, 0, 255]);
     </script>
 </body>
 </html>
