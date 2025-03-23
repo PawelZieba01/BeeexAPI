@@ -24,6 +24,17 @@ glob_num = 0
 # simple database
 simple_db = {}
 
+# devices
+devices_table = ['iot_test_dev', 'iot_test_dev2']
+
+# ----------------------------------- FUNCTIONS -----------------------------------
+def validate_device(device):
+    if device in devices_table:
+        return True
+    return False
+
+# ----------------------------------- ROUTES -----------------------------------
+
 @app.route('/')
 def index():
     log.info(f"New HTTP GET connection to / from {request.remote_addr}")
@@ -34,43 +45,45 @@ def index():
 def save_data(device):
     log.info(f"New HTTP POST connection to /{device}/save_data from {request.remote_addr}")
 
-    if device == 'test_device':
-        data = request.get_json()
-        log.debug(f"Recieved data: {json.dumps(data, indent=4)}")
-        simple_db.extend(data)
-        log.debug(f"simple_db length: {len(simple_db)}")
-        return "OK"
-    
-    elif device == 'iot_test_dev': 
-        data = request.get_json()
-        log.debug(f"Recieved data: {json.dumps(data, indent=4)}")
-        db = db_measurement(device)
-        db.write_data(data)
-        return "OK"
-    
-    else:
-        log.warning(f"Device not found: {device})")
-        return "Device not found", 404 
+    if validate_device(device) == False:
+        log.warning(f"Device not found: {device}")
+        return "Device not found", 404
+
+    data = request.get_json()
+    log.debug(f"Recieved data: {json.dumps(data, indent=4)}")
+    db = db_measurement(device)
+    db.write_data(data)
+    return "OK"
     
 # ----------------------------------- WEBSOCKET -----------------------------------
 
 @sock.route('/<device>/ws')
 def websocket_endpoint(ws, device):
+    log.info(f"New websocket connection to /{device}/ws from {request.remote_addr}")
+
+    if validate_device(device) == False:
+        log.warning(f"Device not found: {device}")
+        ws.send(f"Device not found")
+        return
+    
     try:
-        log.info(f"New websocket connection to /{device}/ws from {request.remote_addr}")
         while True:
             message = ws.receive(timeout=0.2)
             if message:
                 log.info(f"New websocket message from {request.remote_addr}")
                 log.debug(f"Websocket recieved message: {message}")
+                
                 if message == "get_db":
-                    log.info(f"Sending data to client at {request.remote_addr}")
                     db = db_measurement(device)
                     data = db.read_all_data()
+
+                    log.info(f"Sending data to client at {request.remote_addr}")
                     ws.send(json.dumps(data))
+
                 else:
                     log.info(f"Sending BAD COMMAND info to client at {request.remote_addr}")
                     ws.send(f"Bad command")
+
     except Exception as e:
         log.info(f'Connection closed: {e}')
 

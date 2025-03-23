@@ -24,10 +24,12 @@ class database:
         else:
             self.client = InfluxDBClient3(host=_host, token=_INFLUXDB_TOKEN, org=_org)
         
+
     def write_data(self, data):
         for point in data:
             log.debug(f"Writing data to database: {point}")
         self.client.write(database=_database, record=data)
+
 
     def read_data(self, query:str):
         table = self.client.query(query=query, database=_database, language='sql')
@@ -39,14 +41,18 @@ class database:
         return parsed_json_data
             
 
+
+
 class db_measurement(database):
     def __init__(self, name:str):
         self.name = name
         super().__init__()
 
+
     def write_data(self, data:dict):
         log.info(f"Writing data to database: {self.name}")
         points = []
+
         for key in data:
             if self.check_data(data[key]) == False:
                 log.warning(f"Data is not valid - ignored data: {data[key]}")
@@ -61,8 +67,10 @@ class db_measurement(database):
                 .field("timestamp", int(data[key]["timestamp"]))
                 .time(datetime.now())
                 )
+            
             points.append(point)
         super().write_data(points)
+
 
     def read_all_data(self):
         log.info(f"Reading all data from database: {self.name}")
@@ -70,6 +78,7 @@ class db_measurement(database):
         data = super().read_data(query)
         return data
     
+
     def check_data(self, data:dict):
         if "temperature" not in data or "humidity" not in data or "timestamp" not in data:
             return False

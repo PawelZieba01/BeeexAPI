@@ -7,98 +7,161 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
-            display: flex;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            grid-template-columns: auto 1fr;
+            grid-template-areas:
+                "header header"
+                "nav main"
+                "footer footer";
             height: 100vh;
             margin: 0;
             font-family: Arial, sans-serif;
         }
-        .left {
-            width: 50%;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
+        header {
+            grid-area: header;
+            background-color: #f0f0f0;
+            padding: 10px;
+            text-align: center;
+            border-bottom: 1px solid #ccc;
         }
-        .right {
-            width: 50%;
+        nav {
+            grid-area: nav;
+            background-color: #e0e0e0;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
-            padding: 20px;
+            border-right: 1px solid #ccc;
+            width: 0;
+            overflow: hidden;
+            transition: width 0.1s;
+        }
+        nav:hover {
+            width: 10vw;
+        }
+        nav button {
+            display: none;
+        }
+        nav:hover button {
+            display: block;
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        main {
+            grid-area: main;
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 10px;
+            padding: 10px;
+        }
+        .charts {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 10px;
+        }
+        footer {
+            grid-area: footer;
+            background-color: #f0f0f0;
+            padding: 10px;
+            height: 150px;
+            overflow-y: auto;
+            border-top: 2px solid #ccc;
+        }
+        .buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: repeat(3, auto);
+            gap: 10px;
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
         .chart-container {
-            flex: 1;
+            background-color: #fff;
+            border: 1px solid #ccc;
             display: flex;
             justify-content: center;
             align-items: center;
         }
-        .buttons {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-            padding-top: 20px;
+        .display-control {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #fff;
         }
         button {
             padding: 10px;
             font-size: 16px;
             cursor: pointer;
         }
-        .range-inputs {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            padding-top: 20px;
-        }
-        .range-inputs label {
-            display: flex;
-            justify-content: space-between;
-        }
-        .console-log {
-            flex: 1;
-            background-color: #f0f0f0;
-            padding: 10px;
-            margin-top: 20px;
-            overflow-y: auto;
-            border: 1px solid #ccc;
-        }
     </style>
 </head>
 <body>
-    <div class="left">
-        <h1>GUI GUI</h1>
-        <p>Simple and ugly GUI :)</p>
-        <div class="buttons">
-            <button id="btn0" onclick="updateChart('chart1')">Update chart 1</button>
-            <button id="btn1" onclick="updateChart('chart2')">Update chart 2</button>
-            <button id="btn2" onclick="sendToServer('10')">websocket send</button>
-            <button id="btn3" onclick="sendToServer('get_db')">get database</button>
+    <header>
+        <h1>GUI</h1>
+    </header>
+    <nav>
+        <button onclick="selectDevice('iot_test_dev')">Device 1</button>
+        <button onclick="selectDevice('iot_test_dev2')">Device 2</button>
+        <button>Device 3</button>
+        <button>Device 4</button>
+    </nav>
+    <main>
+        <div>
+            <div class="buttons">
+                <button onclick="updateChart('chart1')">Update chart 1</button>
+                <button onclick="updateChart('chart2')">Update chart 2</button>
+                <button onclick="renderData()">Render data</button>
+                <button onclick="resetCharts()">reset Charts</button>
+                <button onclick="sendToServer('10')">WebSocket send</button>
+                <button onclick="sendToServer('get_db')">Get database</button>
+            </div>
+            <div class="controls">            </div>
+            <div class="display-control" id="displayControl">
+                <!-- Content to be displayed here -->
+            </div>
         </div>
-        <div class="range-inputs">
-            <label>
-                Min:
-                <input type="number" id="minValue" value="0">
-            </label>
-            <label>
-                Max:
-                <input type="number" id="maxValue" value="1000">
-            </label>
+        <div class="charts">
+            <div class="chart-container">
+                <canvas id="chart1"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="chart2"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="chart3"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="chart4"></canvas>
+            </div>
         </div>
-        <div class="console-log" id="consoleLog"></div>
-    </div>
-    <div class="right">
-        <div class="chart-container">
-            <canvas id="chart1"></canvas>
-        </div>
-        <div class="chart-container">
-            <canvas id="chart2"></canvas>
-        </div>
-    </div>
+    </main>
+    <footer id="consoleLog">
+        <!-- Console log will be appended here -->
+    </footer>
 
 
-    
     <script>
-        let chart1, chart2;
-        const socket = new WebSocket('ws://127.0.0.1:8000/iot_test_dev/ws');
+        let chart1, chart2, chart3, chart4;
+        server_address = '127.0.0.1:8000';
+        let socket = null;
         let dataStore = [];
+
+        function connectWebsocket(device) {
+            if (socket !== null) {
+                socket.close(3000, 'Reconnecting to another device');
+                delete socket;
+            }
+            socket = new WebSocket(`ws://${server_address}/${device}/ws`);
+            socket.onclose = socket_onclose;
+            socket.onerror = socket_onerror;
+            socket.onmessage = socket_onmessage;
+            socket.onopen = socket_onopen;
+        }
 
 
         function sendToServer(message) {
@@ -109,6 +172,38 @@
                 logToConsole('WebSocket connection is not open');
             }
         }
+
+
+        function formatTimestamp(timestamp) {
+            const tmp = timestamp.toString();
+            const year = tmp.substring(0, 4);
+            const month = tmp.substring(4, 6);
+            const day = tmp.substring(6, 8);
+            const hour = tmp.substring(8, 10);
+            const minute = tmp.substring(10, 12);
+            const second = tmp.substring(12, 14);
+            return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+        }
+
+
+        function renderData() {
+            const time = dataStore.map(item => formatTimestamp(item.timestamp));
+            const temperature = dataStore.map(item => parseFloat(item.temperature));
+            const humidity = dataStore.map(item => parseFloat(item.humidity));
+            resetCharts();
+            updateChart('chart1');
+            updateChart('chart2');
+            updateChart('chart3');
+            updateChart('chart4');
+        }
+
+
+        function selectDevice(device) {
+                logToConsole(`Selected device: ${device}`);
+                connectWebsocket(device);
+                document.getElementById('displayControl').innerHTML = `Selected device: ${device}`;
+        }
+
 
         function createChart(canvasId, labels, data, name, color = [0, 0, 255]) {
             const ctx = document.getElementById(canvasId).getContext('2d');
@@ -143,42 +238,25 @@
             });
         }
 
-        function formatTimestamp(timestamp) {
-            const tmp = timestamp.toString();
-            const year = tmp.substring(0, 4);
-            const month = tmp.substring(4, 6);
-            const day = tmp.substring(6, 8);
-            const hour = tmp.substring(8, 10);
-            const minute = tmp.substring(10, 12);
-            const second = tmp.substring(12, 14);
-            return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
-        }
 
         function updateChart(canvasId) {
             const time = dataStore.map(item => formatTimestamp(item.timestamp));
             const temperature = dataStore.map(item => parseFloat(item.temperature));
             const humidity = dataStore.map(item => parseFloat(item.humidity));
 
-            // if (canvasId === 'chart1' && chart1) {
-            //     chart1.destroy();
-            // } else if (canvasId === 'chart2' && chart2) {
-            //     chart2.destroy();
-            // }
-
-            // if (canvasId === 'chart1') {
-            //     chart1 = createChart(canvasId, time, temperature, "Temperature",  [255, 0, 0]);
-            // } else if (canvasId === 'chart2') {
-            //     chart2 = createChart(canvasId, time, humidity, "Humidity", [0, 0, 255]);
-            // }
-
             if (canvasId === 'chart1') {
                 addDataToChart(chart1, time, temperature);
             } else if (canvasId === 'chart2') {
                 addDataToChart(chart2, time, humidity);
+            } else if (canvasId === 'chart3') {
+                addDataToChart(chart3, time, temperature);
+            } else if (canvasId === 'chart4') {
+                addDataToChart(chart4, time, humidity);
             }
 
             logToConsole("Updated " + canvasId);
         }
+
 
         function addDataToChart(chart, labels, data) {
             labels.forEach((label, index) => {
@@ -188,6 +266,23 @@
             chart.update();
         }
 
+
+        function resetCharts() {
+            chart1.data.labels = [];
+            chart1.data.datasets[0].data = [];
+            chart2.data.labels = [];
+            chart2.data.datasets[0].data = [];
+            chart3.data.labels = [];
+            chart3.data.datasets[0].data = [];
+            chart4.data.labels = [];
+            chart4.data.datasets[0].data = [];
+            chart1.update();
+            chart2.update();
+            chart3.update();
+            chart4.update();
+        }
+
+
         function logToConsole(message) {
             const consoleLog = document.getElementById('consoleLog');
             const logEntry = document.createElement('div');
@@ -196,35 +291,46 @@
             consoleLog.scrollTop = consoleLog.scrollHeight;
         }
 
+
         function setDataToStore(dataArray) {
             dataStore = dataArray;
             logToConsole('Data store updated: ' + JSON.stringify(dataStore));
         }
 
 
-        socket.onopen = function() {
+        function socket_onopen() {
             logToConsole('WebSocket connection established');
+            sendToServer('get_db')
         };
 
-        socket.onmessage = function(event) {
+
+        function socket_onmessage(event) {
             logToConsole('Message from server: ' + event.data.toString());
+
+            if (event.data === 'Device not found') {
+                logToConsole('Device not found');
+                return;
+            }
+
             const jsonData = JSON.parse(event.data);
             setDataToStore(jsonData);
-            updateChart('chart1');
-            updateChart('chart2');
-        };
+                    };
 
-        socket.onerror = function(error) {
+
+        function socket_onerror(error) {
             logToConsole('WebSocket error: ' + error);
         };
 
-        socket.onclose = function() {
+
+        function socket_onclose() {
             logToConsole('WebSocket connection closed');
         };
 
-
+        
         chart1 = createChart('chart1', [], [], name = "Temperature", color = [255, 0, 0]);
         chart2 = createChart('chart2', [], [], name = "Humidity", color = [0, 0, 255]);
+        chart3 = createChart('chart3', [], [], name = "Temperature", color = [255, 0, 0]);
+        chart4 = createChart('chart4', [], [], name = "Humidity", color = [0, 0, 255]);
     </script>
 </body>
 </html>
