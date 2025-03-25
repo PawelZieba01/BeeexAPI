@@ -37,7 +37,7 @@ class logger:
             filename = frame.f_code.co_filename
             lineno = frame.f_lineno
 
-            log_message = f"{timestamp} {filename}:{lineno} {level_str:<10} {message}"
+            log_message = f"{timestamp} {filename}:{lineno:<4} {level_str:<6} {message}"
             self._log(log_message)
 
     def debug(self, message):

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from logger import log
 import keyboard
 
-device = 'iot_test_dev2' 
+device = 'iot_test_dev1' 
 server = 'http://127.0.0.1:8000'
 endpoint = f'/{device}/save_data'
 
@@ -14,7 +14,7 @@ log.info("Starting the client...")
 
 def prepare_data():
     data = {}
-    for i in range(10):
+    for i in range(50):
         point = {f"Point{i}": {
                     "timestamp": (datetime.now() + timedelta(seconds=i)).strftime('%Y%m%d%H%M%S'),
                     "temperature": random.randint(1, 100),

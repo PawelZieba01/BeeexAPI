@@ -31,7 +31,7 @@
             display: flex;
             flex-direction: column;
             border-right: 1px solid #ccc;
-            width: 0;
+            width: 1vw;
             overflow: hidden;
             transition: width 0.1s;
         }
@@ -47,6 +47,17 @@
             font-size: 16px;
             cursor: pointer;
         }
+        nav .devices-label {
+            display: none;
+        }
+        nav:hover .devices-label {
+            display: block;
+            padding: 10px;
+            font-size: 20px;
+            text-align: center;
+            background-color: #ccc;
+        }
+        
         main {
             grid-area: main;
             display: grid;
@@ -64,7 +75,7 @@
             grid-area: footer;
             background-color: #f0f0f0;
             padding: 10px;
-            height: 150px;
+            height: 10vh;
             overflow-y: auto;
             border-top: 2px solid #ccc;
         }
@@ -102,27 +113,31 @@
 </head>
 <body>
     <header>
-        <h1>GUI</h1>
+        <h1>Beeex Viewer</h1>
     </header>
     <nav>
-        <button onclick="selectDevice('iot_test_dev')">Device 1</button>
-        <button onclick="selectDevice('iot_test_dev2')">Device 2</button>
-        <button>Device 3</button>
-        <button>Device 4</button>
+        <div class="devices-label">Devices</div>
+        <button onclick="selectDevice('iot_test_dev1')">iot_test_dev1</button>
+        <button onclick="selectDevice('iot_test_dev2')">iot_test_dev2</button>
+        <button onclick="selectDevice('non_exist_dev')">non_exist_dev</button>
+        <button onclick="sendToServer(JSON.stringify({action: 'bad_action',data:{device: 'iot_test_dev1'}}))">bad_action</button>
     </nav>
     <main>
         <div>
             <div class="buttons">
-                <button onclick="updateChart('chart1')">Update chart 1</button>
-                <button onclick="updateChart('chart2')">Update chart 2</button>
-                <button onclick="renderData()">Render data</button>
-                <button onclick="resetCharts()">reset Charts</button>
-                <button onclick="sendToServer('10')">WebSocket send</button>
-                <button onclick="sendToServer('get_db')">Get database</button>
+                <button onclick="btnUpdateCharts()">Update charts</button>
+                <button onclick="">BUTTON 1</button>
+                <button onclick="">BUTTON 2</button>
+                <button onclick="">BUTTON 3</button>
+                <button onclick="">BUTTON 4</button>
+                <button onclick="">BUTTON 5</button>
             </div>
             <div class="controls">            </div>
             <div class="display-control" id="displayControl">
-                <!-- Content to be displayed here -->
+                Select device to display data
+            </div>
+            <div class="display-control" id="displayControl2">
+                <br> 
             </div>
         </div>
         <div class="charts">
@@ -148,32 +163,12 @@
     <script>
         let chart1, chart2, chart3, chart4;
         server_address = '127.0.0.1:8000';
-        let socket = null;
+        let socket = new WebSocket(`ws://${server_address}/ws`);
         let dataStore = [];
-
-        function connectWebsocket(device) {
-            if (socket !== null) {
-                socket.close(3000, 'Reconnecting to another device');
-                delete socket;
-            }
-            socket = new WebSocket(`ws://${server_address}/${device}/ws`);
-            socket.onclose = socket_onclose;
-            socket.onerror = socket_onerror;
-            socket.onmessage = socket_onmessage;
-            socket.onopen = socket_onopen;
-        }
+        let currentDevice = '';
 
 
-        function sendToServer(message) {
-            if (socket.readyState === WebSocket.OPEN) {
-                socket.send(message);
-                logToConsole('Sent to server: ' + message);
-            } else {
-                logToConsole('WebSocket connection is not open');
-            }
-        }
-
-
+        
         function formatTimestamp(timestamp) {
             const tmp = timestamp.toString();
             const year = tmp.substring(0, 4);
@@ -186,23 +181,41 @@
         }
 
 
-        function renderData() {
-            const time = dataStore.map(item => formatTimestamp(item.timestamp));
-            const temperature = dataStore.map(item => parseFloat(item.temperature));
-            const humidity = dataStore.map(item => parseFloat(item.humidity));
-            resetCharts();
-            updateChart('chart1');
-            updateChart('chart2');
-            updateChart('chart3');
-            updateChart('chart4');
+        function logToConsole(message) {
+            // const consoleLog = document.getElementById('consoleLog');
+            // const logEntry = document.createElement('div');
+            // logEntry.textContent = message;
+            // consoleLog.appendChild(logEntry);
+            // consoleLog.scrollTop = consoleLog.scrollHeight;
+            console.log(message);
         }
 
+
+
+        function setDataToStore(dataArray) {
+            dataStore = dataArray;
+            logToConsole('Data store updated: ' + JSON.stringify(dataStore));
+        }
+        
 
         function selectDevice(device) {
                 logToConsole(`Selected device: ${device}`);
-                connectWebsocket(device);
-                document.getElementById('displayControl').innerHTML = `Selected device: ${device}`;
+                currentDevice = device;
+                document.getElementById('displayControl').innerHTML = `Selected device: <b>${device}</b>`;
+
+                const message = JSON.stringify(
+                    {
+                    action: 'get_data',
+                    data: 
+                        {
+                            device: device
+                        }
+                    }
+                );
+                
+                sendToServer(message);
         }
+
 
 
         function createChart(canvasId, labels, data, name, color = [0, 0, 255]) {
@@ -239,25 +252,6 @@
         }
 
 
-        function updateChart(canvasId) {
-            const time = dataStore.map(item => formatTimestamp(item.timestamp));
-            const temperature = dataStore.map(item => parseFloat(item.temperature));
-            const humidity = dataStore.map(item => parseFloat(item.humidity));
-
-            if (canvasId === 'chart1') {
-                addDataToChart(chart1, time, temperature);
-            } else if (canvasId === 'chart2') {
-                addDataToChart(chart2, time, humidity);
-            } else if (canvasId === 'chart3') {
-                addDataToChart(chart3, time, temperature);
-            } else if (canvasId === 'chart4') {
-                addDataToChart(chart4, time, humidity);
-            }
-
-            logToConsole("Updated " + canvasId);
-        }
-
-
         function addDataToChart(chart, labels, data) {
             labels.forEach((label, index) => {
                 chart.data.labels.push(label);
@@ -267,70 +261,97 @@
         }
 
 
-        function resetCharts() {
-            chart1.data.labels = [];
-            chart1.data.datasets[0].data = [];
-            chart2.data.labels = [];
-            chart2.data.datasets[0].data = [];
-            chart3.data.labels = [];
-            chart3.data.datasets[0].data = [];
-            chart4.data.labels = [];
-            chart4.data.datasets[0].data = [];
-            chart1.update();
-            chart2.update();
-            chart3.update();
-            chart4.update();
+        function resetChart(...chart) {
+            charts.forEach(chart => {
+                chart.data.labels = [];
+                chart.data.datasets[0].data = [];
+                chart.update();
+            });
         }
 
 
-        function logToConsole(message) {
-            const consoleLog = document.getElementById('consoleLog');
-            const logEntry = document.createElement('div');
-            logEntry.textContent = message;
-            consoleLog.appendChild(logEntry);
-            consoleLog.scrollTop = consoleLog.scrollHeight;
+        function renderData(chart) {
+            const time = dataStore.map(item => formatTimestamp(item.timestamp));
+            const temperature = dataStore.map(item => parseFloat(item.temperature));
+            const humidity = dataStore.map(item => parseFloat(item.humidity));
+            resetChart(chart);
+            addDataToChart(chart[0], time, temperature);
+            addDataToChart(chart[1], time, humidity);
+            addDataToChart(chart[2], time, temperature);
+            addDataToChart(chart[3], time, humidity);
         }
 
 
-        function setDataToStore(dataArray) {
-            dataStore = dataArray;
-            logToConsole('Data store updated: ' + JSON.stringify(dataStore));
-        }
 
+        function sendToServer(message) {
+            if (socket.readyState === WebSocket.OPEN) {
+                socket.send(message);
+                logToConsole('Sent to server: ' + message);
 
-        function socket_onopen() {
-            logToConsole('WebSocket connection established');
-            sendToServer('get_db')
-        };
+                document.getElementById('displayControl2').innerHTML = `Waiting for data...`;
+                document.getElementById('displayControl2').style.color = `orange`;
+            } else {
+                logToConsole('WebSocket connection is not open');
 
-
-        function socket_onmessage(event) {
-            logToConsole('Message from server: ' + event.data.toString());
-
-            if (event.data === 'Device not found') {
-                logToConsole('Device not found');
-                return;
+                document.getElementById('displayControl2').innerHTML = `Internal error`;
+                document.getElementById('displayControl2').style.color = `red`;
             }
-
-            const jsonData = JSON.parse(event.data);
-            setDataToStore(jsonData);
-                    };
+        }
 
 
-        function socket_onerror(error) {
-            logToConsole('WebSocket error: ' + error);
+
+        function btnUpdateCharts() {
+            selectDevice(currentDevice);
+        }
+
+
+
+        socket.onopen = function(event) {
+            logToConsole('WebSocket connection opened');
         };
 
 
-        function socket_onclose() {
+        socket.onmessage = function(event) {
+            logToConsole(`WebSocket message received: ${event.data}`);
+            const message = JSON.parse(event.data);
+
+            switch(message.action) {
+                case 'measurements':
+                    logToConsole(`Get action: ${message.action}`);
+                    setDataToStore(message.data.measurements)
+                    renderData(charts)
+                    document.getElementById('displayControl2').innerHTML = `Data updated`;
+                    document.getElementById('displayControl2').style.color = `green`;
+                    break;
+                case 'error':
+                    logToConsole(`Get action: ${message.action}`);
+                    logToConsole(`Error message: ${message.data.message}`);
+                    document.getElementById('displayControl2').innerHTML = `Internal error`;
+                    document.getElementById('displayControl2').style.color = `red`;
+                    break;
+                default:
+                    logToConsole(`Unknown action: ${message.action}`);
+                    document.getElementById('displayControl2').innerHTML = `Internal error`;
+                    document.getElementById('displayControl2').style.color = `red`;
+            }
+        };
+
+
+        socket.onclose = function(event) {
             logToConsole('WebSocket connection closed');
         };
 
-        
-        chart1 = createChart('chart1', [], [], name = "Temperature", color = [255, 0, 0]);
-        chart2 = createChart('chart2', [], [], name = "Humidity", color = [0, 0, 255]);
-        chart3 = createChart('chart3', [], [], name = "Temperature", color = [255, 0, 0]);
-        chart4 = createChart('chart4', [], [], name = "Humidity", color = [0, 0, 255]);
+
+        socket.onerror = function(event) {
+            logToConsole(`WebSocket connection error: ${event}`);
+        };
+
+
+        charts = [chart1, chart2, chart3, chart4];
+        charts[0] = createChart('chart1', [], [], name = "Temperature", color = [255, 0, 0]);
+        charts[1] = createChart('chart2', [], [], name = "Humidity", color = [0, 0, 255]);
+        charts[2] = createChart('chart3', [], [], name = "Temperature", color = [255, 0, 0]);
+        charts[3] = createChart('chart4', [], [], name = "Humidity", color = [0, 0, 255]);
     </script>
 </body>
 </html>
