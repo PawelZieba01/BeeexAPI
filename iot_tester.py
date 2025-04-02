@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from logger import log
 import keyboard
 
-device = 'iot_test_dev1' 
+device = 'iot_test_dev2' 
 server = 'http://127.0.0.1:8000'
 endpoint = f'/{device}/save_data'
 

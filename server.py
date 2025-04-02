@@ -106,6 +106,7 @@ def websocket_endpoint(ws):
                     continue
 
                 json_message = json.loads(message)
+                log.debug(f"Message in json format: {json.dumps(json_message, indent=4)}")
                 if "action" not in json_message:
                     log.warning(f"Missing 'action' key in json message: {message}")
                     ws_send_error(ws, "Missing 'action' key in json message")
@@ -133,10 +134,20 @@ def websocket_endpoint(ws):
                         ws_send_error(ws, "Device not found")
                         continue
 
-                    db = db_measurement(device)
+                    if "dataRange" not in data:
+                        log.warning(f"Missing 'dataRange' key in data: {data}")
+                        ws_send_error(ws, "Missing 'dataRange' key in data")
+                        continue
 
-                    measurements = db.read_all_data()                    
+                    data_range = data["dataRange"]
+                    db = db_measurement(device)
+                    measurements = db.read_data_range(data_range["start"]["date"], data_range["end"]["date"], data_range["start"]["time"], data_range["end"]["time"])                    
                     log.info(f"Get measurements from database")
+
+                    if len(measurements) == 0:
+                        log.warning(f"Database response measurements is empty")
+                        ws_send_error(ws, "Measurements is empty")
+                        continue
                     
                     response = preprare_measurements_message(device, measurements)
                     ws_send_message(ws, response)
@@ -147,7 +158,7 @@ def websocket_endpoint(ws):
                     ws_send_error(ws, "Unknown action")
 
     except Exception as e:
-        log.info(f'Connection closed: {e}')
+        log.warning(f'Connection closed: {e}')
 
 # ----------------------------------- THREADS -----------------------------------
 

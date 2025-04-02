@@ -39,6 +39,12 @@ class database:
         pretty_json_data = json.dumps(parsed_json_data, indent=4)
         log.debug(f"Data from database: {pretty_json_data}")
         return parsed_json_data
+    
+    def datetime_to_timestamp(self, date:str, time:str):
+        dt = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M")
+        timestamp = int(dt.strftime("%Y%m%d%H%M%S"))
+        log.debug(f"Datetime to timestamp: {timestamp}")
+        return timestamp
             
 
 
@@ -75,6 +81,21 @@ class db_measurement(database):
     def read_all_data(self):
         log.info(f"Reading all data from database: {self.name}")
         query = f"SELECT * FROM {self.name}"
+        data = super().read_data(query)
+        return data
+    
+    
+    def read_data_range(self, start_date:str, end_date:str, start_time:str, end_time:str):
+        log.info(f"Reading data range from database: {self.name} from {start_date} {start_time} to {end_date} {end_time}")
+        
+        start_timestamp = super().datetime_to_timestamp(start_date, start_time)
+        end_timestamp = super().datetime_to_timestamp(end_date, end_time)
+
+        if(start_timestamp > end_timestamp):
+            log.warning(f"Start timestamp is greater than end timestamp - ignored data range: {start_timestamp} > {end_timestamp}")
+            return []
+
+        query = f"SELECT * FROM {self.name} WHERE timestamp BETWEEN {start_timestamp} AND {end_timestamp}"
         data = super().read_data(query)
         return data
     

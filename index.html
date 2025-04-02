@@ -89,6 +89,7 @@
             margin-top: 20px;
             display: flex;
             flex-direction: column;
+            width: 50%;
             gap: 10px;
         }
         .chart-container {
@@ -109,6 +110,42 @@
             font-size: 16px;
             cursor: pointer;
         }
+
+        @keyframes rotate360 {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .rotating {
+            animation: rotate360 1s ease-in-out; /* Animacja trwa 1 sekundę */
+        }
+
+        @keyframes bounce {
+            0% {
+                transform: translateY(0);
+            }
+            30% {
+                transform: translateY(-10px); /* Skok w górę */
+            }
+            50% {
+                transform: translateY(0);
+            }
+            70% {
+                transform: translateY(-5px); /* Mniejszy skok */
+            }
+            100% {
+                transform: translateY(0);
+            }
+        }
+
+        .bouncing {
+            animation: bounce 0.5s ease-out; /* Animacja trwa 0.5 sekundy */
+        }
+
     </style>
 </head>
 <body>
@@ -117,10 +154,7 @@
     </header>
     <nav>
         <div class="devices-label">Devices</div>
-        <button onclick="selectDevice('iot_test_dev1')">iot_test_dev1</button>
-        <button onclick="selectDevice('iot_test_dev2')">iot_test_dev2</button>
-        <button onclick="selectDevice('non_exist_dev')">non_exist_dev</button>
-        <button onclick="sendToServer(JSON.stringify({action: 'bad_action',data:{device: 'iot_test_dev1'}}))">bad_action</button>
+        <!-- Buttons will be added here dynamically -->
     </nav>
     <main>
         <div>
@@ -132,11 +166,25 @@
                 <button onclick="">BUTTON 4</button>
                 <button onclick="">BUTTON 5</button>
             </div>
-            <div class="controls">            </div>
-            <div class="display-control" id="displayControl">
+            <div class="controls">            
+                <label for="startDate">Start Date:</label>
+                <input type="date" id="startDate" name="startDate" onclick="this.showPicker()">
+
+                <label for="startTime">Start Time:</label>
+                <input type="time" id="startTime" name="startTime" onclick="this.showPicker()">
+
+                <label for="endDate">End Date:</label>
+                <input type="date" id="endDate" name="endDate" onclick="this.showPicker()">
+
+                <label for="endTime">End Time:</label>
+                <input type="time" id="endTime" name="endTime" onclick="this.showPicker()">
+
+                <button onclick="btnApplyDateRange()">Apply Data Range</button>
+            </div>
+            <div class="display-control" id="displayInfo1">
                 Select device to display data
             </div>
-            <div class="display-control" id="displayControl2">
+            <div class="display-control" id="displayInfo2">
                 <br> 
             </div>
         </div>
@@ -161,13 +209,23 @@
 
 
     <script>
-        let chart1, chart2, chart3, chart4;
-        server_address = '127.0.0.1:8000';
+        const server_address = `${window.location.hostname}:${window.location.port}`;
         let socket = new WebSocket(`ws://${server_address}/ws`);
         let dataStore = [];
+        let charts = [chart1, chart2, chart3, chart4];
         let currentDevice = '';
+        let currentDataRange = {
+            start: {
+                date: null,
+                time: null
+            },
+            end: {
+                date: null,
+                time: null
+            }
+        }
 
-
+        // --------------------------- Helpers --------------------------- //
         
         function formatTimestamp(timestamp) {
             const tmp = timestamp.toString();
@@ -180,6 +238,23 @@
             return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
         }
 
+        function setDefaultDataRange() {
+            const now = new Date();
+            const oneWeekAgo = new Date();
+            oneWeekAgo.setDate(now.getDate() - 7);
+
+            // Formatowanie daty na YYYY-MM-DD
+            const formatDate = (date) => date.toISOString().split('T')[0];
+
+            // Formatowanie godziny na HH:MM
+            const formatTime = (date) => date.toTimeString().split(':').slice(0, 2).join(':');
+
+            // Ustawienie wartości pól
+            document.getElementById('startDate').value = formatDate(oneWeekAgo);
+            document.getElementById('startTime').value = formatTime(oneWeekAgo);
+            document.getElementById('endDate').value = formatDate(now);
+            document.getElementById('endTime').value = formatTime(now);
+        }
 
         function logToConsole(message) {
             // const consoleLog = document.getElementById('consoleLog');
@@ -190,33 +265,46 @@
             console.log(message);
         }
 
-
-
         function setDataToStore(dataArray) {
             dataStore = dataArray;
             logToConsole('Data store updated: ' + JSON.stringify(dataStore));
         }
         
+        function animateElement(element, animationClass, timeout) {
+            element.classList.add(animationClass);
 
-        function selectDevice(device) {
-                logToConsole(`Selected device: ${device}`);
-                currentDevice = device;
-                document.getElementById('displayControl').innerHTML = `Selected device: <b>${device}</b>`;
-
-                const message = JSON.stringify(
-                    {
-                    action: 'get_data',
-                    data: 
-                        {
-                            device: device
-                        }
-                    }
-                );
-                
-                sendToServer(message);
+            // Remove the class after the animation ends
+            setTimeout(() => {
+                element.classList.remove(animationClass);
+            }, timeout); // Adjust the duration to match your animation
         }
 
+        function addDeviceButton(deviceName) {
+            const nav = document.querySelector('nav');
+            const button = document.createElement('button');
 
+            button.textContent = deviceName;
+            button.onclick = () => btnSetDevice(deviceName);
+
+            nav.appendChild(button);
+            logToConsole(`Added new device button: ${deviceName}`);
+        }
+
+        // ------------------------- Display Info ------------------------- //
+
+        function displayInfo1(message, color = 'black') {
+            const displayInfo = document.getElementById('displayInfo1');
+            displayInfo.style.color = color;
+            displayInfo.innerHTML = message;
+        }
+
+        function displayInfo2(message, color = 'black') {
+            const displayInfo = document.getElementById('displayInfo2');
+            displayInfo.style.color = color;
+            displayInfo.innerHTML = message;
+        }
+
+        // ------------------------- Chart -------------------------- //
 
         function createChart(canvasId, labels, data, name, color = [0, 0, 255]) {
             const ctx = document.getElementById(canvasId).getContext('2d');
@@ -251,7 +339,6 @@
             });
         }
 
-
         function addDataToChart(chart, labels, data) {
             labels.forEach((label, index) => {
                 chart.data.labels.push(label);
@@ -260,7 +347,6 @@
             chart.update();
         }
 
-
         function resetChart(...chart) {
             charts.forEach(chart => {
                 chart.data.labels = [];
@@ -268,7 +354,6 @@
                 chart.update();
             });
         }
-
 
         function renderData(chart) {
             const time = dataStore.map(item => formatTimestamp(item.timestamp));
@@ -281,35 +366,80 @@
             addDataToChart(chart[3], time, humidity);
         }
 
+        // ------------------------- Buttons ------------------------- //
 
+        function btnSetDevice(device) {
+            logToConsole(`Selected device: ${device}`);
+            currentDevice = device;
+            displayInfo1(`Selected device: <b>${device}</b>`);
+            displayInfo2("Device changed. Please apply data range again.", 'orange');
+
+            const button = document.querySelector(`button[onclick="btnSetDevice('${device}')"]`);
+            animateElement(button, 'bouncing', 500);
+        }
+
+        function btnUpdateCharts() {
+            requestData();
+        }
+
+        function btnApplyDateRange() {
+            const startDate = document.getElementById('startDate').value;
+            const startTime = document.getElementById('startTime').value;
+            const endDate = document.getElementById('endDate').value;
+            const endTime = document.getElementById('endTime').value;
+
+            const button = document.querySelector('button[onclick="btnApplyDateRange()"]');
+            animateElement(button, 'rotating', 1500);
+
+            if (startDate && startTime && endDate && endTime) {
+                currentDataRange.start.date = startDate;
+                currentDataRange.start.time = startTime;
+                currentDataRange.end.date = endDate;
+                currentDataRange.end.time = endTime;
+
+                logToConsole(`Selected Date Range: ${startDate} ${startTime} to ${endDate} ${endTime}`);
+                displayInfo2(`Selected Date Range: ${startDate} ${startTime} to ${endDate} ${endTime}`);
+
+                requestData();
+            } else {
+                logToConsole(`Selected bad date range: <${startDate}> <${startTime}> to <${endDate}> <${endTime}>`);
+                displayInfo2(`Please select valid data range`, 'red');
+            }
+        }
+
+        // ------------------------ WebSocket ------------------------ //
 
         function sendToServer(message) {
             if (socket.readyState === WebSocket.OPEN) {
                 socket.send(message);
                 logToConsole('Sent to server: ' + message);
 
-                document.getElementById('displayControl2').innerHTML = `Waiting for data...`;
-                document.getElementById('displayControl2').style.color = `orange`;
+                displayInfo2(`Waiting for data...`, 'orange');
             } else {
                 logToConsole('WebSocket connection is not open');
 
-                document.getElementById('displayControl2').innerHTML = `Internal error`;
-                document.getElementById('displayControl2').style.color = `red`;
+                displayInfo2(`Internal error`, 'red');
             }
         }
 
-
-
-        function btnUpdateCharts() {
-            selectDevice(currentDevice);
+        function requestData() {
+            const message = JSON.stringify(
+                    {
+                    action: 'get_data',
+                    data: 
+                        {
+                            device: currentDevice,
+                            dataRange: currentDataRange
+                        }
+                    }
+                );
+                
+                sendToServer(message);
         }
-
-
 
         socket.onopen = function(event) {
             logToConsole('WebSocket connection opened');
         };
-
 
         socket.onmessage = function(event) {
             logToConsole(`WebSocket message received: ${event.data}`);
@@ -320,38 +450,45 @@
                     logToConsole(`Get action: ${message.action}`);
                     setDataToStore(message.data.measurements)
                     renderData(charts)
-                    document.getElementById('displayControl2').innerHTML = `Data updated`;
-                    document.getElementById('displayControl2').style.color = `green`;
+
+                    displayInfo2(`Data updated`, 'green');
                     break;
                 case 'error':
+                    resetChart(charts);
                     logToConsole(`Get action: ${message.action}`);
                     logToConsole(`Error message: ${message.data.message}`);
-                    document.getElementById('displayControl2').innerHTML = `Internal error`;
-                    document.getElementById('displayControl2').style.color = `red`;
+                    displayInfo2(`ERROR: ${message.data.message}`, 'red');
                     break;
                 default:
+                    resetChart(charts);
                     logToConsole(`Unknown action: ${message.action}`);
-                    document.getElementById('displayControl2').innerHTML = `Internal error`;
-                    document.getElementById('displayControl2').style.color = `red`;
+                    displayInfo2(`ERROR: ${message.data.message}`, 'red');
             }
         };
-
 
         socket.onclose = function(event) {
             logToConsole('WebSocket connection closed');
         };
 
-
         socket.onerror = function(event) {
             logToConsole(`WebSocket connection error: ${event}`);
         };
 
+        // -------------------------- Main -------------------------- //
 
-        charts = [chart1, chart2, chart3, chart4];
-        charts[0] = createChart('chart1', [], [], name = "Temperature", color = [255, 0, 0]);
-        charts[1] = createChart('chart2', [], [], name = "Humidity", color = [0, 0, 255]);
-        charts[2] = createChart('chart3', [], [], name = "Temperature", color = [255, 0, 0]);
-        charts[3] = createChart('chart4', [], [], name = "Humidity", color = [0, 0, 255]);
+        window.onload = function() {
+            setDefaultDataRange();
+
+            charts[0] = createChart('chart1', [], [], name = "Temperature", color = [255, 0, 0]);
+            charts[1] = createChart('chart2', [], [], name = "Humidity", color = [0, 0, 255]);
+            charts[2] = createChart('chart3', [], [], name = "Temperature", color = [255, 0, 0]);
+            charts[3] = createChart('chart4', [], [], name = "Humidity", color = [0, 0, 255]);
+
+            addDeviceButton('iot_test_dev1');
+            addDeviceButton('iot_test_dev2');
+            addDeviceButton('non_exist_dev');
+        };
+        
     </script>
 </body>
 </html>
