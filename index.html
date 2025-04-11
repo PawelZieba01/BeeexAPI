@@ -161,7 +161,7 @@
             <div class="buttons">
                 <button onclick="btnUpdateCharts()">Update charts</button>
                 <button onclick="">BUTTON 1</button>
-                <button onclick="">BUTTON 2</button>
+                <button onclick="requestFromServer('get_mean')">Mean Value</button>
                 <button onclick="">BUTTON 3</button>
                 <button onclick="">BUTTON 4</button>
                 <button onclick="">BUTTON 5</button>
@@ -185,7 +185,10 @@
                 Select device to display data
             </div>
             <div class="display-control" id="displayInfo2">
-                <br> 
+                Status: Initialized
+            </div>
+            <div class="display-control" id="displayInfo3">
+                Calculator: 
             </div>
         </div>
         <div class="charts">
@@ -304,6 +307,11 @@
             displayInfo.innerHTML = message;
         }
 
+        function displayInfo3(message, color = 'black') {
+            const displayInfo = document.getElementById('displayInfo3');
+            displayInfo.style.color = color;
+            displayInfo.innerHTML = message;
+        }
         // ------------------------- Chart -------------------------- //
 
         function createChart(canvasId, labels, data, name, color = [0, 0, 255]) {
@@ -383,7 +391,7 @@
         }
 
         function btnUpdateCharts() {
-            requestData();
+            requestFromServer('get_data');
         }
 
         function btnApplyDateRange() {
@@ -404,7 +412,7 @@
                 logToConsole(`Selected Date Range: ${startDate} ${startTime} to ${endDate} ${endTime}`);
                 displayInfo2(`Selected Date Range: ${startDate} ${startTime} to ${endDate} ${endTime}`);
 
-                requestData();
+                requestFromServer('get_data');
             } else {
                 logToConsole(`Selected bad date range: <${startDate}> <${startTime}> to <${endDate}> <${endTime}>`);
                 displayInfo2(`Please select valid data range`, 'red');
@@ -426,10 +434,13 @@
             }
         }
 
-        function requestData() {
-            const message = JSON.stringify(
+        function requestFromServer(action) {
+            const valid_actions = ['get_data', 'get_mean']
+
+            if(valid_actions.includes(action)) {
+                const message = JSON.stringify(
                     {
-                    action: 'get_data',
+                    action: `${action}`,
                     data: 
                         {
                             device: currentDevice,
@@ -437,10 +448,14 @@
                         }
                     }
                 );
-                
                 sendToServer(message);
-        }
 
+            } else {
+                throw new Error("Action is not allowed. Check the 'valid_actions' array.");
+            }
+        }
+        
+    
         socket.onopen = function(event) {
             logToConsole('WebSocket connection opened');
         };
@@ -456,6 +471,11 @@
                     renderData(charts)
 
                     displayInfo2(`Data updated`, 'green');
+                    break;
+                case 'mean':
+                    logToConsole(`Get action: ${message.action}`);
+                    displayInfo2(`Mean value updated`, 'green');
+                    displayInfo3(`Calculator (mean):${message.data.mean}`, 'black');
                     break;
                 case 'error':
                     resetChart(charts);

@@ -30,6 +30,39 @@ def validate_device(device):
         return True
     return False
 
+def validate_ws_message(message):
+    if not is_json(message):
+        log.warning(f"Invalid json format: {message}")
+        return (False, "Invalid json format")
+
+    json_message = json.loads(message)
+    log.debug(f"Message in json format: {json.dumps(json_message, indent=4)}")
+    if "action" not in json_message:
+        return False, "Missing 'action' key in json message"
+
+    if "data" not in json_message:
+        return False, "Missing 'data' key in json message"
+    
+    data = json_message["data"]
+    if "device" not in data:
+        return False, "Missing 'device' key in data"
+    
+    device = data["device"]
+    if validate_device(device) == False:
+        return False, "Device not found"
+    
+    if "dataRange" not in data:
+        return False, "Missing 'dataRange' key in data"
+    
+    dataRange = data["dataRange"]
+    if "start" not in dataRange:
+        return False, "Missing 'start' key in dataRange"
+    
+    if "end" not in dataRange:
+        return False, "Missing 'end' key in dataRange"
+    
+    return True, ""
+  
 def is_json(myjson):
   try:
     json.loads(myjson)
@@ -54,12 +87,12 @@ def prepare_error_message(error):
             "message": error
         }
     }
-    return message
+    return json.dumps(message)
 
 def ws_send_message(ws, message):
-    log.debug(f"Response:\n{json.dumps(message, indent=4)}")
-    ws.send(json.dumps(message))
     log.info(f"Send response to client")
+    log.debug(f"Response:\n{message}")
+    ws.send(message)
 
 def ws_send_error(ws, error):
     response = prepare_error_message(error)
@@ -79,7 +112,11 @@ def save_data(device):
 
     if validate_device(device) == False:
         log.warning(f"Device not found: {device}")
-        return "Device not found", 404
+        return prepare_error_message("Device not found"), 404
+    
+    if is_json(request.data) == False:
+        log.warning(f"Data is not in json format")
+        return prepare_error_message("Data is not in json format"), 404
 
     data = request.get_json()
     log.debug(f"Recieved data: {json.dumps(data, indent=4)}")
@@ -101,46 +138,24 @@ def websocket_endpoint(ws):
                 log.info(f"New websocket message from {request.remote_addr}")
                 log.debug(f"Websocket recieved message: {message}")
 
-                if not is_json(message):
-                    log.warning(f"Invalid json format: {message}")
-                    ws_send_error(ws, "Invalid json format")
+                # Validate data
+                err, mess = validate_ws_message(message)
+                if err == False:
+                    log.warning(f"Invalid websocket message: {mess}")
+                    ws_send_error(ws, mess)
                     continue
-
+                
+                # Valid Data
                 json_message = json.loads(message)
-                log.debug(f"Message in json format: {json.dumps(json_message, indent=4)}")
-                if "action" not in json_message:
-                    log.warning(f"Missing 'action' key in json message: {message}")
-                    ws_send_error(ws, "Missing 'action' key in json message")
-                    continue
-
-                if "data" not in json_message:
-                    log.warning(f"Missing 'action' key in json message: {message}")
-                    ws_send_error(ws, "Missing 'data' key in json message")
-                    continue
-
                 action = json_message["action"]
                 data = json_message["data"]
+                device = data["device"]
+                data_range = data["dataRange"]
 
+                # Actions 
                 if action == "get_data":
                     log.info(f"Action: {action}")
 
-                    if "device" not in data:
-                        log.warning(f"Missing 'device' key in data: {data}")
-                        ws_send_error(ws, "Missing 'device' key in data")
-                        continue
-
-                    device = data["device"]
-                    if validate_device(device) == False:
-                        log.warning(f"Device not found: {device}")
-                        ws_send_error(ws, "Device not found")
-                        continue
-
-                    if "dataRange" not in data:
-                        log.warning(f"Missing 'dataRange' key in data: {data}")
-                        ws_send_error(ws, "Missing 'dataRange' key in data")
-                        continue
-
-                    data_range = data["dataRange"]
                     db = db_measurement(device)
                     measurements = db.read_data_range(data_range["start"]["date"], data_range["end"]["date"], data_range["start"]["time"], data_range["end"]["time"])                    
                     log.info(f"Get measurements from database")
@@ -150,10 +165,12 @@ def websocket_endpoint(ws):
                         ws_send_error(ws, "Measurements is empty")
                         continue
                     
-                    response = preprare_measurements_message(device, measurements)
+                    response = json.dumps( preprare_measurements_message(device, measurements) )
                     ws_send_message(ws, response)
+
                 elif action == "":
                     pass
+
                 else:
                     log.warning(f"Unknown action: {action}")
                     ws_send_error(ws, "Unknown action")
