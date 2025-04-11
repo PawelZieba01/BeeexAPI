@@ -14,7 +14,7 @@ log.info("Starting the client...")
 
 def prepare_data():
     data = {}
-    for i in range(50):
+    for i in range(10):
         point = {f"Point{i}": {
                     "timestamp": (datetime.now() + timedelta(seconds=i)).strftime('%Y%m%d%H%M%S'),
                     "temperature": random.randint(1, 100),

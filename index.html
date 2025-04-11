@@ -374,8 +374,12 @@
             displayInfo1(`Selected device: <b>${device}</b>`);
             displayInfo2("Device changed. Please apply data range again.", 'orange');
 
-            const button = document.querySelector(`button[onclick="btnSetDevice('${device}')"]`);
-            animateElement(button, 'bouncing', 500);
+            const buttons = document.querySelectorAll('nav button');
+            buttons.forEach(button => {
+                if (button.textContent === device) {
+                    animateElement(button, 'bouncing', 500);
+                }
+            });
         }
 
         function btnUpdateCharts() {
