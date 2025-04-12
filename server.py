@@ -21,7 +21,7 @@ sock = Sock(app)
 # devices
 devices_table = ['iot_test_dev1', 'iot_test_dev2']
 
-# Processing actuins
+# Processing actions
 processing_actions = ['get_data', 'get_mean', 'get_max', 'get_min']
 
 # Global dictionary to store queues for each WebSocket connection
