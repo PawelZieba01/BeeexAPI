@@ -5,7 +5,9 @@ import time
 import json
 from logger import log
 import keyboard
+from queue import Queue
 from database import db_measurement
+from helpers import *
 
 log.info("Disable werkzeug logs:")
 import logging
@@ -16,87 +18,15 @@ print("")
 app = Flask(__name__)
 sock = Sock(app)
 
-glob_num = 0
-
-# simple database
-simple_db = {}
-
 # devices
 devices_table = ['iot_test_dev1', 'iot_test_dev2']
 
-# ----------------------------------- FUNCTIONS -----------------------------------
-def validate_device(device):
-    if device in devices_table:
-        return True
-    return False
+# Processing actuins
+processing_actions = ['get_data', 'get_mean', 'get_max', 'get_min']
 
-def validate_ws_message(message):
-    if not is_json(message):
-        log.warning(f"Invalid json format: {message}")
-        return (False, "Invalid json format")
+# Global dictionary to store queues for each WebSocket connection
+websocket_queues = {}
 
-    json_message = json.loads(message)
-    log.debug(f"Message in json format: {json.dumps(json_message, indent=4)}")
-    if "action" not in json_message:
-        return False, "Missing 'action' key in json message"
-
-    if "data" not in json_message:
-        return False, "Missing 'data' key in json message"
-    
-    data = json_message["data"]
-    if "device" not in data:
-        return False, "Missing 'device' key in data"
-    
-    device = data["device"]
-    if validate_device(device) == False:
-        return False, "Device not found"
-    
-    if "dataRange" not in data:
-        return False, "Missing 'dataRange' key in data"
-    
-    dataRange = data["dataRange"]
-    if "start" not in dataRange:
-        return False, "Missing 'start' key in dataRange"
-    
-    if "end" not in dataRange:
-        return False, "Missing 'end' key in dataRange"
-    
-    return True, ""
-  
-def is_json(myjson):
-  try:
-    json.loads(myjson)
-  except ValueError as e:
-    return False
-  return True
-
-def preprare_measurements_message(device, measurements):
-    message = {
-        "action": "measurements",
-        "data": {
-            "device": device,
-            "measurements": measurements
-        }
-    }
-    return message
-
-def prepare_error_message(error):
-    message = {
-        "action": "error",
-        "data": {
-            "message": error
-        }
-    }
-    return json.dumps(message)
-
-def ws_send_message(ws, message):
-    log.info(f"Send response to client")
-    log.debug(f"Response:\n{message}")
-    ws.send(message)
-
-def ws_send_error(ws, error):
-    response = prepare_error_message(error)
-    ws_send_message(ws, response)
 
 # ----------------------------------- ROUTES -----------------------------------
 
@@ -105,6 +35,8 @@ def index():
     log.info(f"New HTTP GET connection to / from {request.remote_addr}")
     with open("index.html", "r") as html:
         return render_template_string(html.read())
+    
+
     
 @app.route('/<device>/save_data', methods=['POST'])
 def save_data(device):
@@ -120,73 +52,108 @@ def save_data(device):
 
     data = request.get_json()
     log.debug(f"Recieved data: {json.dumps(data, indent=4)}")
-    log.debug(f"Received characters: {json.dumps(data)}")  # Print received characters
+    log.debug(f"Received characters: {json.dumps(data)}")
     db = db_measurement(device)
     db.write_data(data)
     return "OK"
     
+
 # ----------------------------------- WEBSOCKET -----------------------------------
 
 @sock.route('/ws')
 def websocket_endpoint(ws):
+    ws_id = id(ws)
+
     log.info(f"New websocket connection to /ws from {request.remote_addr}")
+    log.info(f"Created queues for WebSocket {id(ws)}")
+
+    websocket_queues[ws_id] = {"in": Queue(), "out": Queue()}
+    log.debug(f"Queue: {websocket_queues}")
 
     try:
         while True:
-            message = ws.receive(timeout=0.2)
+            message = ws.receive(timeout=0.1)
+            # New message
             if message:
                 log.info(f"New websocket message from {request.remote_addr}")
                 log.debug(f"Websocket recieved message: {message}")
 
                 # Validate data
-                err, mess = validate_ws_message(message)
-                if err == False:
+                is_valid, mess = validate_ws_message(message)
+                if is_valid:
+                    json_message = json.loads(message)
+                    action = json_message["action"]
+                    websocket_queues[ws_id]["in"].put(json_message)
+                    log.info(f"Message for '{action}' added to processing queue for WebSocket {ws_id}")
+                else:
                     log.warning(f"Invalid websocket message: {mess}")
                     ws_send_error(ws, mess)
                     continue
                 
-                # Valid Data
-                json_message = json.loads(message)
-                action = json_message["action"]
-                data = json_message["data"]
-                device = data["device"]
-                data_range = data["dataRange"]
-
-                # Actions 
-                if action == "get_data":
-                    log.info(f"Action: {action}")
-
-                    db = db_measurement(device)
-                    measurements = db.read_data_range(data_range["start"]["date"], data_range["end"]["date"], data_range["start"]["time"], data_range["end"]["time"])                    
-                    log.info(f"Get measurements from database")
-
-                    if len(measurements) == 0:
-                        log.warning(f"Database response measurements is empty")
-                        ws_send_error(ws, "Measurements is empty")
-                        continue
-                    
-                    response = json.dumps( preprare_measurements_message(device, measurements) )
-                    ws_send_message(ws, response)
-
-                elif action == "":
-                    pass
-
-                else:
-                    log.warning(f"Unknown action: {action}")
-                    ws_send_error(ws, "Unknown action")
+            # Queue processing
+            if not websocket_queues[ws_id]["out"].empty():
+                response = json.dumps( websocket_queues[ws_id]["out"].get() )
+                ws_send_message(ws, response)
 
     except Exception as e:
         log.warning(f'Connection closed: {e}')
 
+        # delete queues for this websocket
+        if ws_id in websocket_queues:
+            del websocket_queues[ws_id]
+            log.info(f"Removed queues for WebSocket {ws_id}")
+
+    
+
 # ----------------------------------- THREADS -----------------------------------
 
-def processing_thread():
+def processing_thread(): 
+    log.info("Processing thread started")   
     while True:
-        time.sleep(1)
+        for ws_id, queues in list(websocket_queues.items()):
+            if not queues["in"].empty():
+                message = queues["in"].get()
+                log.info(f"Processing message from WebSocket {ws_id}")
+                log.debug(f"Processing message: {message}")
+                
+                data = message["data"]
+                device = data["device"]
+                data_range = data["dataRange"]
+                action = message["action"]
+
+                # Actions for processing
+                log.info(f"Resolve action: {action}")
+
+                db = db_measurement(device)
+                db.set_data_range(data_range["start"]["date"], data_range["end"]["date"], data_range["start"]["time"], data_range["end"]["time"])
+
+                if action == "get_data":
+                    process_value = db.read_data()
+                    log.info(f"Get measurements from database")
+
+                elif action == "get_mean":
+                    process_value = prepare_payload_message(("temperature", db.read_mean("temperature")), ("humidity", db.read_mean("humidity")))
+                    log.info(f"Get mean value from database")
+
+                elif action == "get_max":
+                    process_value = prepare_payload_message(("temperature", db.read_max("temperature")), ("humidity", db.read_max("humidity")))
+                    log.info(f"Get max value from database")
+                    
+                elif action == "get_min":
+                    process_value = prepare_payload_message(("temperature", db.read_min("temperature")), ("humidity", db.read_min("humidity")))
+                    log.info(f"Get min value from database")
+                
+                else: 
+                    log.warning(f"Unknown process action: {action}")
+                    process_value = None
+                    
+                response = prepare_ws_message(device, action, process_value)
+                log.debug(f"Processing result: {response}")
+                queues["out"].put(response) 
+        time.sleep(0.1)
+
 
 # ----------------------------------- MAIN -----------------------------------
-
-keyboard.add_hotkey('ctrl+q', lambda: log.debug(f"Simple database: {json.dumps(simple_db, indent=4)}"))
 
 if __name__ == '__main__':
     worker_thread = threading.Thread(target=processing_thread, daemon=True)

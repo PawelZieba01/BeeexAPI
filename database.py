@@ -33,13 +33,17 @@ class database:
 
     def read_data(self, query:str):
         table = self.client.query(query=query, database=_database, language='sql')
-        df = table.to_pandas().sort_values(by='time')
+        try:
+            df = table.to_pandas().sort_values(by='time')
+        except:
+            df = table.to_pandas()
         json_data = df.to_json(orient='records', date_format='iso')
         parsed_json_data = json.loads(json_data)
         pretty_json_data = json.dumps(parsed_json_data, indent=4)
-        log.debug(f"Data from database: {pretty_json_data}")
+        log.debug(f"Data from database (json): {pretty_json_data}")
         return parsed_json_data
     
+
     def datetime_to_timestamp(self, date:str, time:str):
         dt = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M")
         timestamp = int(dt.strftime("%Y%m%d%H%M%S"))
@@ -85,23 +89,58 @@ class db_measurement(database):
         return data
     
     
-    def read_data_range(self, start_date:str, end_date:str, start_time:str, end_time:str):
-        log.info(f"Reading data range from database: {self.name} from {start_date} {start_time} to {end_date} {end_time}")
-        
-        start_timestamp = super().datetime_to_timestamp(start_date, start_time)
-        end_timestamp = super().datetime_to_timestamp(end_date, end_time)
+    def read_data(self):
+        log.info(f"Reading data from database: {self.name} from {self.start_timestamp} to {self.end_timestamp}")
 
-        if(start_timestamp > end_timestamp):
-            log.warning(f"Start timestamp is greater than end timestamp - ignored data range: {start_timestamp} > {end_timestamp}")
-            return []
-
-        query = f"SELECT * FROM {self.name} WHERE timestamp BETWEEN {start_timestamp} AND {end_timestamp}"
+        query = f"SELECT * FROM {self.name} WHERE timestamp BETWEEN {self.start_timestamp} AND {self.end_timestamp}"
         data = super().read_data(query)
-        return data
+        return data    
+
+
+    def read_mean(self, param_name:str):
+        log.info(f"Reading {param_name} mean value from database: {self.name} from {self.start_timestamp} to {self.end_timestamp}")
+
+        query = f"SELECT MEAN({param_name}) FROM {self.name} WHERE timestamp BETWEEN {self.start_timestamp} AND {self.end_timestamp}"
+        data = super().read_data(query)
+        parsed_data = list(data[0].values())[0]
+
+        log.debug(f"Mean value from database: {parsed_data}")
+        return parsed_data
     
+    
+    def read_max(self, param_name:str):
+        log.info(f"Reading {param_name} max value from database: {self.name} from {self.start_timestamp} to {self.end_timestamp}")
+
+        query = f"SELECT MAX({param_name}) FROM {self.name} WHERE timestamp BETWEEN {self.start_timestamp} AND {self.end_timestamp}"
+        data = super().read_data(query)
+        parsed_data = list(data[0].values())[0]
+
+        log.debug(f"Max value from database: {parsed_data}")
+        return parsed_data
+    
+
+    def read_min(self, param_name:str):
+        log.info(f"Reading {param_name} min value from database: {self.name} from {self.start_timestamp} to {self.end_timestamp}")
+
+        query = f"SELECT MIN({param_name}) FROM {self.name} WHERE timestamp BETWEEN {self.start_timestamp} AND {self.end_timestamp}"
+        data = super().read_data(query)
+        parsed_data = list(data[0].values())[0]
+
+        log.debug(f"Min value from database: {parsed_data}")
+        return parsed_data
+
 
     def check_data(self, data:dict):
         if "temperature" not in data or "humidity" not in data or "timestamp" not in data:
             return False
         return True
     
+
+    def set_data_range(self, start_date:str, end_date:str, start_time:str, end_time:str):
+        self.start_timestamp = super().datetime_to_timestamp(start_date, start_time)
+        self.end_timestamp = super().datetime_to_timestamp(end_date, end_time)
+
+        if(self.start_timestamp > self.end_timestamp):
+            log.warning(f"Start timestamp is greater than end timestamp - ignored data range: {self.start_timestamp} > {self.end_timestamp}")
+            return False
+        return True

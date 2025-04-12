@@ -160,11 +160,11 @@
         <div>
             <div class="buttons">
                 <button onclick="btnUpdateCharts()">Update charts</button>
-                <button onclick="">BUTTON 1</button>
-                <button onclick="requestFromServer('get_mean')">Mean Value</button>
-                <button onclick="">BUTTON 3</button>
-                <button onclick="">BUTTON 4</button>
-                <button onclick="">BUTTON 5</button>
+                <button onclick="requestFromServer('get_mean')">Mean</button>
+                <button onclick=""></button>
+                <button onclick="requestFromServer('get_max')">Max</button>
+                <button onclick=""></button>
+                <button onclick="requestFromServer('get_min')">Min</button>
             </div>
             <div class="controls">            
                 <label for="startDate">Start Date:</label>
@@ -188,7 +188,10 @@
                 Status: Initialized
             </div>
             <div class="display-control" id="displayInfo3">
-                Calculator: 
+                <br>
+            </div>
+            <div class="display-control" id="displayInfo4">
+                <br>
             </div>
         </div>
         <div class="charts">
@@ -257,6 +260,11 @@
             document.getElementById('startTime').value = formatTime(oneWeekAgo);
             document.getElementById('endDate').value = formatDate(now);
             document.getElementById('endTime').value = formatTime(now);
+
+            currentDataRange.start.date = document.getElementById('startDate').value;
+            currentDataRange.start.time = document.getElementById('startTime').value;
+            currentDataRange.end.date = document.getElementById('endDate').value;
+            currentDataRange.end.time = document.getElementById('endTime').value;
         }
 
         function logToConsole(message) {
@@ -295,20 +303,8 @@
 
         // ------------------------- Display Info ------------------------- //
 
-        function displayInfo1(message, color = 'black') {
-            const displayInfo = document.getElementById('displayInfo1');
-            displayInfo.style.color = color;
-            displayInfo.innerHTML = message;
-        }
-
-        function displayInfo2(message, color = 'black') {
-            const displayInfo = document.getElementById('displayInfo2');
-            displayInfo.style.color = color;
-            displayInfo.innerHTML = message;
-        }
-
-        function displayInfo3(message, color = 'black') {
-            const displayInfo = document.getElementById('displayInfo3');
+        function displayInfo(id ,message, color = 'black') {
+            const displayInfo = document.getElementById(`displayInfo${id}`);
             displayInfo.style.color = color;
             displayInfo.innerHTML = message;
         }
@@ -379,8 +375,8 @@
         function btnSetDevice(device) {
             logToConsole(`Selected device: ${device}`);
             currentDevice = device;
-            displayInfo1(`Selected device: <b>${device}</b>`);
-            displayInfo2("Device changed. Please apply data range again.", 'orange');
+            displayInfo("1",`Selected device: <b>${device}</b>`);
+            displayInfo("2","Device changed. Please apply data range again.", 'orange');
 
             const buttons = document.querySelectorAll('nav button');
             buttons.forEach(button => {
@@ -410,12 +406,12 @@
                 currentDataRange.end.time = endTime;
 
                 logToConsole(`Selected Date Range: ${startDate} ${startTime} to ${endDate} ${endTime}`);
-                displayInfo2(`Selected Date Range: ${startDate} ${startTime} to ${endDate} ${endTime}`);
+                displayInfo("2",`Selected Date Range: ${startDate} ${startTime} to ${endDate} ${endTime}`);
 
                 requestFromServer('get_data');
             } else {
                 logToConsole(`Selected bad date range: <${startDate}> <${startTime}> to <${endDate}> <${endTime}>`);
-                displayInfo2(`Please select valid data range`, 'red');
+                displayInfo("2",`Please select valid data range`, 'red');
             }
         }
 
@@ -426,16 +422,16 @@
                 socket.send(message);
                 logToConsole('Sent to server: ' + message);
 
-                displayInfo2(`Waiting for data...`, 'orange');
+                displayInfo("2",`Waiting for data...`, 'orange');
             } else {
                 logToConsole('WebSocket connection is not open');
 
-                displayInfo2(`Internal error`, 'red');
+                displayInfo("2",`Internal error`, 'red');
             }
         }
 
         function requestFromServer(action) {
-            const valid_actions = ['get_data', 'get_mean']
+            const valid_actions = ['get_data', 'get_mean', 'get_max', 'get_min'];
 
             if(valid_actions.includes(action)) {
                 const message = JSON.stringify(
@@ -455,7 +451,7 @@
             }
         }
         
-    
+        
         socket.onopen = function(event) {
             logToConsole('WebSocket connection opened');
         };
@@ -465,28 +461,44 @@
             const message = JSON.parse(event.data);
 
             switch(message.action) {
-                case 'measurements':
+                case 'get_data':
                     logToConsole(`Get action: ${message.action}`);
-                    setDataToStore(message.data.measurements)
+                    setDataToStore(message.data.payload)
                     renderData(charts)
 
-                    displayInfo2(`Data updated`, 'green');
+                    displayInfo("2",`Data updated`, 'green');
                     break;
-                case 'mean':
+                case 'get_mean':
                     logToConsole(`Get action: ${message.action}`);
-                    displayInfo2(`Mean value updated`, 'green');
-                    displayInfo3(`Calculator (mean):${message.data.mean}`, 'black');
+                    displayInfo("2",`Mean value updated`, 'green');
+                    displayInfo("3",`Calculator (mean) temperature: <b>${message.data.payload.temperature}</b>`, 'black');
+                    displayInfo("4",`Calculator (mean) humidity: <b>${message.data.payload.humidity}</b>`, 'black');
                     break;
+
+                case 'get_max':
+                    logToConsole(`Get action: ${message.action}`);
+                    displayInfo("2",`Max value updated`, 'green');
+                    displayInfo("3",`Calculator (max) temperature: <b>${message.data.payload.temperature}</b>`, 'black');
+                    displayInfo("4",`Calculator (max) humidity: <b>${message.data.payload.humidity}</b>`, 'black');
+                    break;
+
+                case 'get_min':
+                    logToConsole(`Get action: ${message.action}`);
+                    displayInfo("2",`Min value updated`, 'green');
+                    displayInfo("3",`Calculator (min) temperature: <b>${message.data.payload.temperature}</b>`, 'black');
+                    displayInfo("4",`Calculator (min) humidity: <b>${message.data.payload.humidity}</b>`, 'black');
+                    break;
+
                 case 'error':
                     resetChart(charts);
                     logToConsole(`Get action: ${message.action}`);
                     logToConsole(`Error message: ${message.data.message}`);
-                    displayInfo2(`ERROR: ${message.data.message}`, 'red');
+                    displayInfo("2",`ERROR: ${message.data.message}`, 'red');
                     break;
                 default:
                     resetChart(charts);
                     logToConsole(`Unknown action: ${message.action}`);
-                    displayInfo2(`ERROR: ${message.data.message}`, 'red');
+                    displayInfo("2",`ERROR: ${message.data.message}`, 'red');
             }
         };
 
