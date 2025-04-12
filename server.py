@@ -52,7 +52,6 @@ def save_data(device):
 
     data = request.get_json()
     log.debug(f"Recieved data: {json.dumps(data, indent=4)}")
-    log.debug(f"Received characters: {json.dumps(data)}")
     db = db_measurement(device)
     db.write_data(data)
     return "OK"
