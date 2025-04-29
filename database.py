@@ -4,15 +4,24 @@ from datetime import datetime
 from logger import log
 from influxdb_client_3 import InfluxDBClient3, flight_client_options, Point
 
-_INFLUXDB_TOKEN='BoQD4N5-fX2FgYUh_e3fqZ1ijZEc9mr3H5GSat1Y1u1avOmrKQ0LRFWAjNXu_nhvwblagZvWM5Xh7ebbBOcSjQ=='
+_INFLUXDB_TOKEN=''
 _org = "Dev"
 _host = "https://eu-central-1-1.aws.cloud2.influxdata.com"
-_database="IOT_Dev"
+_database = "IOT_Dev"
 
 class database:
     def __init__(self):
         self.cert = None
         self.client = None
+
+        # Get access token from file
+        try:
+            token_file = open("influx_token.txt", "r")
+            _INFLUXDB_TOKEN = token_file.read()
+            token_file.close()
+            log.info("Found database access token")
+        except:
+            log.error("Unable to get database access token.")
 
         #if OS is Windows use certifi for SSL
         if os.name == 'nt':

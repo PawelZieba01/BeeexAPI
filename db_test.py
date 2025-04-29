@@ -10,10 +10,14 @@ cert = fh.read()
 fh.close()
 # ---------------------------------------#
 
-INFLUXDB_TOKEN='5q6QqgyYgM1vvd6OJu6o4pNxRShKCYvFtkbDveWk6MvvYYiB8olMpJxDYAbut7LjR8PDh_lc3gJ888M4iAW7fw=='
+INFLUXDB_TOKEN=''
 org = "Dev"
 host = "https://eu-central-1-1.aws.cloud2.influxdata.com"
 database="IOT_Dev"
+
+token_file = open("influx_token.txt", "r")
+INFLUXDB_TOKEN = token_file.read()
+token_file.close()
 
 client = InfluxDBClient3(host=host, token=INFLUXDB_TOKEN, org=org, flight_client_options=flight_client_options(tls_root_certs=cert))
 
