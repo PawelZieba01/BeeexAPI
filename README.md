@@ -1,5 +1,7 @@
 # BeeexAPI
 
+Repozytorium kodu: https://github.com/PawelZieba01/BeeexAPI
+
 BeeexAPI to aplikacja IoT umożliwiająca zbieranie, przetwarzanie i wizualizację danych z urządzeń IoT. Projekt składa się z serwera, klienta, bazy danych oraz interfejsu użytkownika.
 
 ## Struktura projektu
